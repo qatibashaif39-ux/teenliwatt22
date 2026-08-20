@@ -1,0 +1,6 @@
+{
+  "name": "EZ Checkout - Liwa Figs",
+  "description": "E-commerce storefront for fresh figs, dates, and fruits with same-day delivery in the UAE",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

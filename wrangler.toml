@@ -1,0 +1,30 @@
+name = "teenliwatt2"
+account_id = "0b7dc087410628baa1f652ea0fb8bd57"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Static Assets for Cloudflare Workers
+[assets]
+directory = "./dist/client"
+not_found_handling = "single-page-application"
+
+[vars]
+ENVIRONMENT = "production"
+STORE_NAME = "teenliwatt2"
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "admin123456"
+ZIINA_TEST_MODE = "true"
+R2_BUCKET_NAME = "bt-liwa"
+R2_ACCOUNT_ID = "0b7dc087410628baa1f652ea0fb8bd57"
+
+[[r2_buckets]]
+binding = "BT_LIWA"
+bucket_name = "bt-liwa"
+
+[[services]]
+binding = "Todo_list"
+service = "to-do-list-kv-template"
+environment = "production"
+
+
+

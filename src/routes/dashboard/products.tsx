@@ -284,12 +284,13 @@ function ProductForm({
     setUploading(true);
     try {
       const url = await uploadProductImage(file);
-      setForm((f) => ({ ...f, image_url: url }));
-      toast.success("تم رفع صورة المنتج بنجاح");
+      setForm((f) => ({ ...f, image_url: url, seed_key: null }));
+      toast.success("تم رفع صورة المنتج بنجاح وتجهيزها");
     } catch (err: any) {
       toast.error(err?.message ?? "تعذّر رفع الصورة");
     } finally {
       setUploading(false);
+      if (e.target) e.target.value = "";
     }
   };
 
@@ -513,31 +514,44 @@ function ProductForm({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
               <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background py-2 text-xs font-semibold hover:border-primary hover:text-primary transition-colors">
                 {uploading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
                 ) : (
                   <Plus className="h-3.5 w-3.5" />
                 )}
-                {uploading ? "جارٍ الرفع…" : "رفع صورة من الجهاز"}
+                {uploading ? "جارٍ الرفع إلى R2…" : "رفع صورة من الجهاز"}
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/png, image/jpeg, image/webp, image/gif"
                   className="hidden"
                   onChange={onPickImage}
                   disabled={uploading}
                 />
               </label>
 
-              <input
-                className="w-full rounded-xl border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
-                placeholder="أو ألصق رابط صورة (URL)"
-                value={form.image_url ?? ""}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    image_url: e.target.value || null,
-                  })
-                }
-              />
+              <div className="flex items-center gap-1.5">
+                <input
+                  className="w-full rounded-xl border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
+                  placeholder="أو ألصق رابط صورة (URL)"
+                  value={form.image_url ?? ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      image_url: e.target.value || null,
+                      seed_key: e.target.value ? null : form.seed_key,
+                    })
+                  }
+                />
+                {form.image_url && (
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, image_url: null }))}
+                    className="shrink-0 rounded-lg border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-500 hover:bg-red-500/20 transition-colors"
+                    title="حذف الصورة والعودة للقوالب"
+                  >
+                    حذف
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

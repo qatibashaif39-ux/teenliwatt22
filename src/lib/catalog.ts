@@ -354,47 +354,19 @@ export async function deleteCategory(id: string) {
   }
 }
 
-// Upload image to Cloudflare R2 Storage (with canvas compression & instant preview fallback)
+// Upload image to Cloudflare R2 Storage (with automatic compression & fallback)
 export async function uploadProductImage(file: File): Promise<string> {
-  try {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("folder", "products");
-
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("teenliwa_admin_token") : null;
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    const res = await fetch("/api/storage/upload", {
-      method: "POST",
-      headers,
-      body: formData,
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.url) {
-        return data.url;
-      }
-    }
-  } catch (apiErr) {
-    console.warn("Storage upload API error, using local fallback:", apiErr);
-  }
-
-  // Fallback to compressed Data URL
-  return new Promise((resolve, reject) => {
+  // Compress image on client-side before upload to optimize speed and size
+  const compressedDataUrl: string = await new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       if (typeof window === "undefined" || !e.target?.result) {
-        resolve(reader.result as string);
+        resolve("");
         return;
       }
       const img = new Image();
       img.onload = () => {
-        const maxDim = 800;
+        const maxDim = 1200;
         let width = img.width;
         let height = img.height;
         if (width > maxDim || height > maxDim) {
@@ -411,19 +383,78 @@ export async function uploadProductImage(file: File): Promise<string> {
         canvas.height = height;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          resolve(reader.result as string);
+          resolve(e.target?.result as string);
           return;
         }
         ctx.drawImage(img, 0, 0, width, height);
-        const compressed = canvas.toDataURL("image/jpeg", 0.85);
-        resolve(compressed);
+        resolve(canvas.toDataURL("image/jpeg", 0.88));
       };
-      img.onerror = () => resolve(reader.result as string);
+      img.onerror = () => resolve(e.target?.result as string);
       img.src = e.target.result as string;
     };
-    reader.onerror = () => reject(new Error("Failed to read image file"));
+    reader.onerror = () => resolve("");
     reader.readAsDataURL(file);
   });
+
+  try {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("teenliwa_admin_token") : null;
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    // Attempt 1: Upload via Multipart Form-Data
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("folder", "products");
+
+    const res = await fetch("/api/storage/upload", {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.url) {
+        return data.url;
+      }
+    }
+
+    // Attempt 2: If Multipart failed, try Base64 payload
+    if (compressedDataUrl) {
+      const base64Res = await fetch("/api/storage/upload", {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          base64: compressedDataUrl,
+          filename: file.name || `product_${Date.now()}.jpg`,
+          mimeType: "image/jpeg",
+          folder: "products",
+        }),
+      });
+
+      if (base64Res.ok) {
+        const data = await base64Res.json();
+        if (data?.url) {
+          return data.url;
+        }
+      }
+    }
+  } catch (apiErr) {
+    console.warn("Storage upload API error, falling back to optimized image string:", apiErr);
+  }
+
+  // Fallback to compressed Data URL so saving is NEVER blocked
+  if (compressedDataUrl) {
+    return compressedDataUrl;
+  }
+
+  throw new Error("تعذّر قراءة أو معالجة ملف الصورة");
 }
 
 // Delivery zones removed — flat fee per emirate. See @/lib/emirates.

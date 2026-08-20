@@ -138,14 +138,16 @@ storageApi.get("/files", async (c) => {
 });
 
 /**
- * GET /api/storage/files/:key
+ * GET /api/storage/files/*
  * Serve / download file directly
  */
 storageApi.get("/files/*", async (c) => {
   try {
     const env = (c.env as any) || {};
-    const rawKey = c.req.path.replace(/^\/api\/storage\/files\//, "");
-    const key = decodeURIComponent(rawKey);
+    const paramWildcard = c.req.param("*") || "";
+    const fallbackKey = c.req.path.replace(/.*\/api\/storage\/files\//, "");
+    const rawKey = paramWildcard || fallbackKey;
+    const key = decodeURIComponent(rawKey).replace(/^\/+/, "");
     const obj = await getObjectFromR2(key, { env });
 
     if (!obj) {
@@ -170,8 +172,10 @@ storageApi.get("/files/*", async (c) => {
 storageApi.delete("/files/*", async (c) => {
   try {
     const env = (c.env as any) || {};
-    const rawKey = c.req.path.replace(/^\/api\/storage\/files\//, "");
-    const key = decodeURIComponent(rawKey);
+    const paramWildcard = c.req.param("*") || "";
+    const fallbackKey = c.req.path.replace(/.*\/api\/storage\/files\//, "");
+    const rawKey = paramWildcard || fallbackKey;
+    const key = decodeURIComponent(rawKey).replace(/^\/+/, "");
     await deleteObjectFromR2(key, { env });
     return c.json({ success: true, deletedKey: key });
   } catch (err: any) {

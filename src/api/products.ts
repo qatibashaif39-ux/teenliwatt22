@@ -24,6 +24,15 @@ export interface ProductItem {
   image: string;
   minimum_order_quantity: number;
   maximum_order_quantity?: number | null;
+  sku?: string | null;
+  brand?: string | null;
+  condition?: string | null;
+  unit_weight?: string | null;
+  google_product_category?: string | null;
+  custom_label_0?: string | null;
+  custom_label_1?: string | null;
+  custom_label_2?: string | null;
+  metadata?: Record<string, any> | string | null;
 }
 
 export const INITIAL_CATEGORIES: CategoryItem[] = [
@@ -169,10 +178,40 @@ async function ensureD1Tables(db: any) {
           sort_order INTEGER DEFAULT 1,
           minimum_order_quantity INTEGER DEFAULT 1,
           maximum_order_quantity INTEGER,
+          sku TEXT,
+          brand TEXT,
+          condition TEXT,
+          unit_weight TEXT,
+          google_product_category TEXT,
+          custom_label_0 TEXT,
+          custom_label_1 TEXT,
+          custom_label_2 TEXT,
+          metadata TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );`,
       )
       .run();
+
+    // Migrate existing D1 tables by trying to add columns if they don't exist
+    const newCols = [
+      "sku TEXT",
+      "brand TEXT",
+      "condition TEXT",
+      "unit_weight TEXT",
+      "google_product_category TEXT",
+      "custom_label_0 TEXT",
+      "custom_label_1 TEXT",
+      "custom_label_2 TEXT",
+      "metadata TEXT",
+    ];
+
+    for (const col of newCols) {
+      try {
+        await db.prepare(`ALTER TABLE products ADD COLUMN ${col}`).run();
+      } catch {
+        // Column probably already exists, safe to ignore
+      }
+    }
 
     // Ensure default categories exist in D1 (INSERT OR IGNORE preserves existing user data)
     for (const cat of INITIAL_CATEGORIES) {
@@ -192,12 +231,9 @@ async function ensureD1Tables(db: any) {
   }
 }
 
-// ---------------- PRODUCTS API ----------------
-
-// GET /api/products
-productsApi.get("/", async (c) => {
-  const env = (c.env as any) || {};
-  const db = env.DB;
+// Helper function to get products from D1 / R2 / Memory
+export async function fetchServerProducts(env: any = {}): Promise<ProductItem[]> {
+  const db = env?.DB;
 
   if (db && typeof db.prepare === "function") {
     try {
@@ -228,13 +264,31 @@ productsApi.get("/", async (c) => {
             maximum_order_quantity: r.maximum_order_quantity
               ? Number(r.maximum_order_quantity)
               : null,
+            sku: r.sku || null,
+            brand: r.brand || null,
+            condition: r.condition || null,
+            unit_weight: r.unit_weight || null,
+            google_product_category: r.google_product_category || null,
+            custom_label_0: r.custom_label_0 || null,
+            custom_label_1: r.custom_label_1 || null,
+            custom_label_2: r.custom_label_2 || null,
+            metadata:
+              typeof r.metadata === "string"
+                ? (() => {
+                    try {
+                      return JSON.parse(r.metadata);
+                    } catch {
+                      return r.metadata;
+                    }
+                  })()
+                : r.metadata || null,
           };
         });
         memoryProducts = d1Products;
-        return c.json({ success: true, products: d1Products });
+        return d1Products;
       }
     } catch (err) {
-      console.warn("[GET /api/products] D1 query error, using memory fallback:", err);
+      console.warn("[fetchServerProducts] D1 query error, using memory fallback:", err);
     }
   }
 
@@ -243,12 +297,22 @@ productsApi.get("/", async (c) => {
     const store = await loadStoreFromR2({ env });
     if (store && store.products && store.products.length > 0) {
       memoryProducts = store.products;
+      return memoryProducts;
     }
   } catch (r2Err) {
-    console.warn("[GET /api/products] R2 load warning:", r2Err);
+    console.warn("[fetchServerProducts] R2 load warning:", r2Err);
   }
 
-  return c.json({ success: true, products: memoryProducts });
+  return memoryProducts;
+}
+
+// ---------------- PRODUCTS API ----------------
+
+// GET /api/products
+productsApi.get("/", async (c) => {
+  const env = (c.env as any) || {};
+  const products = await fetchServerProducts(env);
+  return c.json({ success: true, products });
 });
 
 // POST /api/products (Create Product)
@@ -266,6 +330,15 @@ productsApi.post("/", async (c) => {
       sort_order,
       minimum_order_quantity = 1,
       maximum_order_quantity = null,
+      sku = null,
+      brand = null,
+      condition = null,
+      unit_weight = null,
+      google_product_category = null,
+      custom_label_0 = null,
+      custom_label_1 = null,
+      custom_label_2 = null,
+      metadata = null,
     } = body;
 
     if (!name || price === undefined || price === null) {
@@ -309,6 +382,17 @@ productsApi.post("/", async (c) => {
       image: image_url || "",
       minimum_order_quantity: Math.max(1, Number(minimum_order_quantity || 1)),
       maximum_order_quantity: maximum_order_quantity ? Number(maximum_order_quantity) : null,
+      sku: sku ? String(sku).trim() : null,
+      brand: brand ? String(brand).trim() : null,
+      condition: condition ? String(condition).trim() : null,
+      unit_weight: unit_weight ? String(unit_weight).trim() : null,
+      google_product_category: google_product_category
+        ? String(google_product_category).trim()
+        : null,
+      custom_label_0: custom_label_0 ? String(custom_label_0).trim() : null,
+      custom_label_1: custom_label_1 ? String(custom_label_1).trim() : null,
+      custom_label_2: custom_label_2 ? String(custom_label_2).trim() : null,
+      metadata: metadata || null,
     };
 
     // Update memory products
@@ -323,10 +407,20 @@ productsApi.post("/", async (c) => {
     if (db && typeof db.prepare === "function") {
       try {
         await ensureD1Tables(db);
+        const metadataString =
+          newProduct.metadata && typeof newProduct.metadata === "object"
+            ? JSON.stringify(newProduct.metadata)
+            : newProduct.metadata || null;
+
         await db
           .prepare(
-            `INSERT OR REPLACE INTO products (id, name, description, price, image_url, seed_key, available, category_id, sort_order, minimum_order_quantity, maximum_order_quantity, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT OR REPLACE INTO products (
+              id, name, description, price, image_url, seed_key, available, 
+              category_id, sort_order, minimum_order_quantity, maximum_order_quantity,
+              sku, brand, condition, unit_weight, google_product_category,
+              custom_label_0, custom_label_1, custom_label_2, metadata, created_at
+            )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             newProduct.id,
@@ -340,6 +434,15 @@ productsApi.post("/", async (c) => {
             newProduct.sort_order,
             newProduct.minimum_order_quantity,
             newProduct.maximum_order_quantity,
+            newProduct.sku,
+            newProduct.brand,
+            newProduct.condition,
+            newProduct.unit_weight,
+            newProduct.google_product_category,
+            newProduct.custom_label_0,
+            newProduct.custom_label_1,
+            newProduct.custom_label_2,
+            metadataString,
             new Date().toISOString(),
           )
           .run();
@@ -377,6 +480,50 @@ productsApi.put("/:id", async (c) => {
         category: categoryName,
         image: body.image_url !== undefined ? body.image_url : existing.image,
         seed_key: body.seed_key !== undefined ? body.seed_key : existing.seed_key,
+        sku: body.sku !== undefined ? (body.sku ? String(body.sku).trim() : null) : existing.sku,
+        brand:
+          body.brand !== undefined
+            ? body.brand
+              ? String(body.brand).trim()
+              : null
+            : existing.brand,
+        condition:
+          body.condition !== undefined
+            ? body.condition
+              ? String(body.condition).trim()
+              : null
+            : existing.condition,
+        unit_weight:
+          body.unit_weight !== undefined
+            ? body.unit_weight
+              ? String(body.unit_weight).trim()
+              : null
+            : existing.unit_weight,
+        google_product_category:
+          body.google_product_category !== undefined
+            ? body.google_product_category
+              ? String(body.google_product_category).trim()
+              : null
+            : existing.google_product_category,
+        custom_label_0:
+          body.custom_label_0 !== undefined
+            ? body.custom_label_0
+              ? String(body.custom_label_0).trim()
+              : null
+            : existing.custom_label_0,
+        custom_label_1:
+          body.custom_label_1 !== undefined
+            ? body.custom_label_1
+              ? String(body.custom_label_1).trim()
+              : null
+            : existing.custom_label_1,
+        custom_label_2:
+          body.custom_label_2 !== undefined
+            ? body.custom_label_2
+              ? String(body.custom_label_2).trim()
+              : null
+            : existing.custom_label_2,
+        metadata: body.metadata !== undefined ? body.metadata : existing.metadata,
       };
       memoryProducts[index] = updated;
     }
@@ -388,6 +535,13 @@ productsApi.put("/:id", async (c) => {
     if (db && typeof db.prepare === "function") {
       try {
         await ensureD1Tables(db);
+        const metadataString =
+          body.metadata !== undefined
+            ? typeof body.metadata === "object" && body.metadata !== null
+              ? JSON.stringify(body.metadata)
+              : body.metadata
+            : null;
+
         await db
           .prepare(
             `UPDATE products SET 
@@ -400,7 +554,16 @@ productsApi.put("/:id", async (c) => {
               category_id = COALESCE(?, category_id),
               sort_order = COALESCE(?, sort_order),
               minimum_order_quantity = COALESCE(?, minimum_order_quantity),
-              maximum_order_quantity = COALESCE(?, maximum_order_quantity)
+              maximum_order_quantity = COALESCE(?, maximum_order_quantity),
+              sku = COALESCE(?, sku),
+              brand = COALESCE(?, brand),
+              condition = COALESCE(?, condition),
+              unit_weight = COALESCE(?, unit_weight),
+              google_product_category = COALESCE(?, google_product_category),
+              custom_label_0 = COALESCE(?, custom_label_0),
+              custom_label_1 = COALESCE(?, custom_label_1),
+              custom_label_2 = COALESCE(?, custom_label_2),
+              metadata = COALESCE(?, metadata)
              WHERE id = ?`,
           )
           .bind(
@@ -414,6 +577,39 @@ productsApi.put("/:id", async (c) => {
             body.sort_order !== undefined ? Number(body.sort_order) : null,
             body.minimum_order_quantity !== undefined ? Number(body.minimum_order_quantity) : null,
             body.maximum_order_quantity !== undefined ? Number(body.maximum_order_quantity) : null,
+            body.sku !== undefined ? (body.sku ? String(body.sku).trim() : null) : null,
+            body.brand !== undefined ? (body.brand ? String(body.brand).trim() : null) : null,
+            body.condition !== undefined
+              ? body.condition
+                ? String(body.condition).trim()
+                : null
+              : null,
+            body.unit_weight !== undefined
+              ? body.unit_weight
+                ? String(body.unit_weight).trim()
+                : null
+              : null,
+            body.google_product_category !== undefined
+              ? body.google_product_category
+                ? String(body.google_product_category).trim()
+                : null
+              : null,
+            body.custom_label_0 !== undefined
+              ? body.custom_label_0
+                ? String(body.custom_label_0).trim()
+                : null
+              : null,
+            body.custom_label_1 !== undefined
+              ? body.custom_label_1
+                ? String(body.custom_label_1).trim()
+                : null
+              : null,
+            body.custom_label_2 !== undefined
+              ? body.custom_label_2
+                ? String(body.custom_label_2).trim()
+                : null
+              : null,
+            metadataString,
             id,
           )
           .run();

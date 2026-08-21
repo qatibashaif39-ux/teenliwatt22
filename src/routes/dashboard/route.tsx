@@ -35,7 +35,7 @@ const NAV = [
   { to: "/dashboard/products", label: "المنتجات", icon: Package, exact: false },
   { to: "/dashboard/categories", label: "الأصناف", icon: Tags, exact: false },
   { to: "/dashboard/todos", label: "المهام (Todo)", icon: CheckSquare, exact: false },
-  { to: "/dashboard/ads", label: "إعلانات AI", icon: Megaphone, exact: false },
+  { to: "/dashboard/ads", label: "كتالوج وإعلانات Meta", icon: Megaphone, exact: false },
   { to: "/dashboard/database", label: "قاعدة البيانات D1", icon: Database, exact: false },
   { to: "/dashboard/settings", label: "الإعدادات", icon: Settings, exact: false },
 ] as const;

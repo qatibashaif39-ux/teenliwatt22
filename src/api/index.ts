@@ -7,16 +7,18 @@ import { orderApi } from "./orders";
 import { customerApi } from "./customers";
 import { productsApi, categoriesApi } from "./products";
 import { storageApi } from "./storage";
+import { feedsApi } from "./feeds";
 
 export const api = new Hono().basePath("/api");
 
-// Mount Auth, Orders, Customers, Products, Categories, Storage & Todo APIs
+// Mount Auth, Orders, Customers, Products, Categories, Storage, Feeds & Todo APIs
 api.route("/auth", authApi);
 api.route("/orders", orderApi);
 api.route("/customers", customerApi);
 api.route("/products", productsApi);
 api.route("/categories", categoriesApi);
 api.route("/storage", storageApi);
+api.route("/feeds", feedsApi);
 api.route("/todos", todoApi);
 
 // Enable CORS for all API routes

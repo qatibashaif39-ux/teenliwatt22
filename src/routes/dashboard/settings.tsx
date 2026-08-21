@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -12,6 +12,8 @@ import {
   Share2,
   Receipt,
   Percent,
+  Rss,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CURRENCY } from "@/data/products";
@@ -377,6 +379,26 @@ function DashboardSettings() {
           >
             {showMeta ? "إخفاء" : "إظهار"}
           </button>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-blue-500/30 bg-blue-500/5 p-3.5 text-xs">
+          <div className="flex items-center gap-2.5">
+            <Rss className="h-4 w-4 text-orange-500 shrink-0" />
+            <div>
+              <span className="font-bold text-foreground">كتالوج منتجات Meta (RSS / XML Feed)</span>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                تغذية منتجات مباشرة متزامنة تلقائياً مع Meta Commerce Manager لإعلانات الكتالوج
+                الديناميكية.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/dashboard/ads"
+            className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            إدارة الكتالوج
+            <ExternalLink className="h-3 w-3" />
+          </Link>
         </div>
       </section>
 

@@ -21,6 +21,15 @@ export interface ProductRow {
   image: string;
   minimum_order_quantity: number;
   maximum_order_quantity?: number | null;
+  sku?: string | null;
+  brand?: string | null;
+  condition?: string | null;
+  unit_weight?: string | null;
+  google_product_category?: string | null;
+  custom_label_0?: string | null;
+  custom_label_1?: string | null;
+  custom_label_2?: string | null;
+  metadata?: Record<string, any> | string | null;
 }
 
 export const FALLBACK_CATEGORIES: Category[] = [
@@ -208,6 +217,15 @@ export interface ProductInput {
   sort_order: number;
   minimum_order_quantity: number;
   maximum_order_quantity?: number | null;
+  sku?: string | null;
+  brand?: string | null;
+  condition?: string | null;
+  unit_weight?: string | null;
+  google_product_category?: string | null;
+  custom_label_0?: string | null;
+  custom_label_1?: string | null;
+  custom_label_2?: string | null;
+  metadata?: Record<string, any> | string | null;
 }
 
 export async function createProduct(input: ProductInput): Promise<ProductRow> {
